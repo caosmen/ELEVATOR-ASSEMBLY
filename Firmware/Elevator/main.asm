@@ -212,28 +212,7 @@ SETUP:
 	ldi temp, ((WGM>> 2) << WGM12)|(PRESCALE << CS10)
 	sts TCCR1B, temp
 
-	ldi temp, 100
-
 	rjmp MAIN
 
 MAIN:
-	cpi temp, 0
-	breq skip_dec
-
-	cpi temp, 1
-	breq enable
-
-	cpi temp, 2
-	breq disable
-
-	rjmp skip
-
-	enable:
-		rcall Enable_Timer
-		rjmp skip
-	disable:
-		rcall Disable_Timer
-	skip:
-		dec temp
-		skip_dec:
-			rjmp MAIN
+	rjmp MAIN
