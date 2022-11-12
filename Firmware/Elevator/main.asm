@@ -108,13 +108,12 @@ Add_call:
 	push r16
 	push r17
 
-	// Copia o valor do argumento floor (r18) para o registrador r16
-	mov r16, r18
+	// Copia o valor do argumento floor (r18) para o registrador r17
+	mov r17, r18
 
-	// Aplica a função (-x + 3) para converter o andar em uma posição da fila
-	com r16
-	inc r16
-	subi r16, -3
+	// Aplica a função (3 - x) para converter o andar em uma posição da fila
+	ldi r16, 3
+	sub r16, r17
 
 	// Inicialização o ponteiro Z
 	ldi ZL, low(queue)
@@ -147,13 +146,12 @@ Add_call:
 Clear_call:
 	push r16
 
-	// Copia o valor do argumento floor (r17) para o registrador r16
-	mov r16, r17
+	// Copia o valor do argumento floor (r18) para o registrador r17
+	mov r17, r18
 
-	// Aplica a função (-x + 3) para converter o andar em uma posição da fila
-	com r16
-	inc r16
-	subi r16, -3
+	// Aplica a função (3 - x) para converter o andar em uma posição da fila
+	ldi r16, 3
+	sub r16, r17
 
 	// Inicialização o ponteiro Z
 	ldi ZL, low(queue)
