@@ -24,8 +24,7 @@
 .def temp = R16
 
 // Registradores usados para armazenar o estado do elevador
-.def estado = r19
-.def door = r20
+.def estado = r20
 .def floor = r21
 .def next_floor = r22
 .def direction = r23
@@ -35,10 +34,10 @@
 /* -------------------------------------------------------------------------- */
 /* -------------------------Definição dos pinos usados----------------------- */
 
-.equ pin_button_external_floor_0 = PD5
-.equ pin_button_external_floor_1 = PD4
-.equ pin_button_external_floor_2 = PD3
-.equ pin_button_external_floor_3 = PD2
+.equ pin_button_external_floor_0 = PB5
+.equ pin_button_external_floor_1 = PB4
+.equ pin_button_external_floor_2 = PB3
+.equ pin_button_external_floor_3 = PB2
 
 .equ pin_button_internal_floor_0 = PB1
 .equ pin_button_internal_floor_1 = PB0
@@ -49,11 +48,7 @@
 .equ pin_button_close_door = PD4
 
 .equ pin_buzzer = PC5
-
 .equ pin_led = PC4
-
-.equ pin_display_a = PD3
-.equ pin_display_b = PD2
 
 /* ------------------------Definição dos registradores----------------------- */
 /* -------------------------------------------------------------------------- */
@@ -99,6 +94,25 @@ OCI1A_Interrupt:
 /* -------------------------------------------------------------------------- */
 /* -----------------------------------Funções-------------------------------- */
 
+/* ---------Clear counter: Zera o contador e o registrador de contagem------- */
+/* -------------------------------------------------------------------------- */
+/* Registradores usados: r16 (temp)                                           */
+/* Definição da função: void Clear_counter()                                  */
+Clear_counter:
+	push temp
+
+	// Zerando o contador
+	clr counter
+
+	// Zerando o registrador de contagem
+	clr temp
+	sts TCNT1L, temp
+	sts TCNT1H, temp
+
+	pop temp
+
+	ret
+
 /* ----------------Add Call: Adiciona uma nova chamada na fila--------------- */
 /* -------------------------------------------------------------------------- */
 /* Registradores usados: r16, r17, r18, r19                                   */
@@ -141,13 +155,12 @@ Add_call:
 /* -----------Clear Call: Limpa a chamada que foi executada da fila---------- */
 /* -------------------------------------------------------------------------- */
 /* Registradores usados: r16, r17                                             */
-/* Definição da função: void Clear_call(floor int)                            */
-/* Argumentos: floor (r17)                                                    */
+/* Definição da função: void Clear_call()                                     */
 Clear_call:
 	push r16
 
-	// Copia o valor do argumento floor (r18) para o registrador r17
-	mov r17, r18
+	// Copia o valor do registrador floor para o registrador r17
+	mov r17, floor
 
 	// Aplica a função (3 - x) para converter o andar em uma posição da fila
 	ldi r16, 3
@@ -171,19 +184,205 @@ Clear_call:
 
 	ret
 
+/* ---Get next floor: Atribui ao registrador next_floor o novo andar alvo---- */
+/* -------------------------------------------------------------------------- */
+/* Registradores usados: r16, r17, r18, r19                                   */
+/* Definição da função: void Get_next_floor()                                 */
+Get_next_floor:
+	push r16
+	push r17
+	push r18
+	push r19
+
+	// Copia o valor do registrador floor para o registrador r17
+	mov r17, floor
+
+	// Aplica a função (3 - x) para converter o andar em uma posição da fila
+	ldi r16, 3
+	// Salvando no registrador r16 o andar (convertido para a posição na fila)
+	sub r16, r17
+
+	// Salvando o valor 3 no registrador r17 para converter a posição de retorno em um andar
+	ldi r17, 3
+
+	// Inicialização o ponteiro Z
+	ldi ZL, low(queue)
+	ldi ZH, high(queue)
+
+	// Switch case para a variável direction
+	switch_direction:
+		cpi direction, 0
+		breq case_direction_stop
+		cpi direction, 1
+		breq case_direction_up
+		cpi direction, -1
+		breq case_direction_down
+
+	case_direction_stop:
+		// Inicializa o registrador r18 com zero (para realizar o loop de 0 a 3)
+		clr r18
+		while_direction_stop:
+			// Verificar se já passou por todos os valores
+			cpi r18, 4
+			brge end_while_direction_stop
+
+			// Lê a posição atual da fila
+			ld r19, Z+ 
+
+			// Verifica se existe uma chamada
+			cpi r19, 0
+			// Caso não exista ele pula o retorno
+			breq skip_direction_stop
+
+			// Convertendo a posição encontrada para um andar (3 - posição)
+			sub r17, r18
+
+			// Salvando a nova posição no registrador new_floor
+			mov next_floor, r17
+
+			rjmp found_result
+
+			skip_direction_stop:
+				inc r18
+				rjmp while_direction_stop
+		end_while_direction_stop:
+
+		rjmp end_switch_direction
+	case_direction_up:
+		// Desloca o ponteiro para a posição do andar na fila
+		add ZL, r16
+		sbci ZH, 0
+
+		// Inicializa o registrador r18 com o valor do registrador 16 (andar atual na fila)
+		mov r18, r16
+		while_direction_up_internal:
+			// Verificar se já passou por todos os valores
+			cpi r18, 0
+			brlt end_while_direction_up_internal
+
+			// Lê a posição atual da fila
+			ld r19, Z
+
+			// Decrementa o ponteiro Z
+			subi ZL, 1
+			sbci ZH, 0
+
+			// Faz uma máscara no bit referente a chamada interna
+			andi r19, 0b00000010
+			// Verifica se existe uma chamada interna
+			cpi r19, 0
+			// Caso não exista ele pula o retorno
+			breq skip_direction_up_internal
+
+			// Convertendo a posição encontrada para um andar (3 - posição)
+			sub r17, r18
+
+			// Salvando a nova posição no registrador new_floor
+			mov next_floor, r17
+
+			rjmp found_result
+
+			skip_direction_up_internal:
+				dec r18
+				rjmp while_direction_up_internal
+		end_while_direction_up_internal:
+
+		// Reseta a posição do ponteiro Z
+		ldi ZL, low(queue)
+		ldi ZH, high(queue)
+
+		// Inicializa o registrador r18 com o valor zero
+		clr r18
+		// Incrementa o valor de r16 em 1
+		inc r16
+		while_direction_up_external:
+			// Verificar se já passou por todos os valores
+			cp r18, r16
+			brge end_while_direction_up_external
+
+			// Lê a posição atual da fila
+			ld r19, Z+
+
+			// Faz uma máscara no bit referente a chamada externa
+			andi r19, 0b00000001
+			// Verifica se existe uma chamada externa
+			cpi r19, 0
+			// Caso não exista ele pula o retorno
+			breq skip_direction_up_external
+
+			// Convertendo a posição encontrada para um andar (3 - posição)
+			sub r17, r18
+
+			// Salvando a nova posição no registrador new_floor
+			mov next_floor, r17
+
+			rjmp found_result
+
+			skip_direction_up_external:
+				inc r18
+				rjmp while_direction_up_external
+		end_while_direction_up_external:
+
+		rjmp end_switch_direction
+	case_direction_down:
+		// Desloca o ponteiro para a posição do andar na fila
+		add ZL, r16
+		sbci ZH, 0
+
+		// Inicializa o registrador r18 com o valor do registrador 16 (andar atual na fila)
+		mov r18, r16
+		while_direction_down:
+			// Verificar se já passou por todos os valores
+			cpi r18, 4
+			brge end_while_direction_down
+
+			// Lê a posição atual da fila
+			ld r19, Z+
+
+			// Verifica se existe uma chamada
+			cpi r19, 0
+			// Caso não exista ele pula o retorno
+			breq skip_direction_down
+
+			// Convertendo a posição encontrada para um andar (3 - posição)
+			sub r17, r18
+
+			// Salvando a nova posição no registrador new_floor
+			mov next_floor, r17
+
+			rjmp found_result
+
+			skip_direction_down:
+				inc r18
+				rjmp while_direction_down
+		end_while_direction_down:
+
+		rjmp end_switch_direction
+	end_switch_direction:
+		
+	ldi next_floor, -1
+
+	found_result:
+
+	pop r19
+	pop r18
+	pop r17
+	pop r16
+
+	ret
+
 /* -------Update Display: Uma subrotina que atualiza o andar no display------ */
 /* -------------------------------------------------------------------------- */
 /* Registradores usados: r16 (temp)                                           */
 Update_display:
 	push temp
 
-	// Lendo os valores atuais da Porta D
-	in temp, PORTD
+	// Copiando o registrador floor para o registrador temp
+	mov temp, floor
+	// Movendo o andar atual para a posição do pino 2 e 3 da Porta D
+	lsl temp
+	lsl temp
 
-	// Limpando os dois bits a direita da registrador temporário
-	andi temp, 0b11111100
-	// Agregando o valor de floor aos dois bits limpados
-	or temp, floor
 	// Escrevendo o novo valor do display na Porta D
 	out PORTD, temp
 
@@ -255,8 +454,8 @@ SETUP:
 	/* PD6 = Andar 3 (Botões internos) - Entrada                              */
 	/* PD5 = Abrir Porta - Entrada                                            */
 	/* PD4 = Fechar Porta - Entrada                                           */
-	/* PD3 = Display 7 segmentos (Entrada A) - Saída                          */
-	/* PD2 = Display 7 segmentos (Entrada B) - Saída                          */
+	/* PD3 = Display 7 segmentos (Entrada B) - Saída                          */
+	/* PD2 = Display 7 segmentos (Entrada A) - Saída                          */
 	ldi temp, 0b00001100
 
 	// Configurando a Porta D
@@ -288,7 +487,6 @@ SETUP:
 
 	// Atribuindo os valores aos registradores
 	ldi estado, 1
-	ldi door, 0
 	ldi floor, 0
 	ldi next_floor, -1
 	ldi direction, 0
@@ -370,7 +568,7 @@ MAIN:
 	rjmp button_internal_floor_3_pressed
 	/* ----------------Leitura dos botões (internos e externos)-------------- */
 
-	rjmp switch
+	rjmp switch_state
 
 	/* -------Preparando os atributos para executar a função (Add_call)------ */
 	button_external_floor_0_pressed:
@@ -427,7 +625,7 @@ MAIN:
 	/* -------Preparando os atributos para executar a função (Add_call)------ */
 	/* ---------------------------------------------------------------------- */
 	/* -------------------------Início switch(estado)------------------------ */
-	switch:
+	switch_state:
 		cpi estado, 1
 		breq case_idle
 		cpi estado, 2
@@ -445,52 +643,111 @@ MAIN:
 		cpi estado, 8
 		breq case_next_destiny
 
-		/* -------------------------------Cases------------------------------ */
 		case_idle:
+			rjmp case_idle_longjump
+		case_elevator_ups:
+			rjmp case_elevator_ups_longjump
+		case_elevator_downs:
+			rjmp case_elevator_downs_longjump
+		case_new_floor:
+			rjmp case_new_floor_longjump
+		case_elevator_stops:
+			rjmp case_elevator_stops_longjump
+		case_buzzer_warning:
+			rjmp case_buzzer_warning_longjump
+		case_holding_door:
+			rjmp case_holding_door_longjump
+		case_next_destiny:
+			rjmp case_next_destiny_longjump
+
+		/* -------------------------------Cases------------------------------ */
+		case_idle_longjump:
 			// Verificando se o botão de abrir a porta está sendo pressionado
 			sbic PIND, pin_button_open_door
-			rjmp open_door_in_current_floor
+			rjmp call_in_current_floor
 
-			rjmp end_switch
+			call Get_next_floor
 
-			// Caso o botão de abrir a porta seja pressionado, ela é aberta no andar atual
-			open_door_in_current_floor:
-				// Mudando o estado para "case_elevator_stops" e resetando o contador
+			// Se não tiver chamada, ir para "no_call"
+			cpi next_floor, -1
+			breq no_call
+
+			// Se a chamada for no andar atual, ir para "call_in_current_floor"
+			cp next_floor, floor
+			breq call_in_current_floor
+
+			// Se a chamada for para subir, ir para "call_up"
+			cp next_floor, floor
+			brge call_up
+
+			call_down:
+				ldi direction, -1
+				// Mudando o estado para "case_elevator_downs"
+				ldi estado, 3
+				// Resetando o contador
+				call Clear_counter
+
+				rjmp end_switch_state
+
+			call_up:
+				ldi direction, 1
+				// Mudando o estado para "case_elevator_ups"
+				ldi estado, 2
+				// Resetando o contador
+				call Clear_counter
+
+				rjmp end_switch_state
+
+			call_in_current_floor:
+				ldi direction, 0
+				// Mudando o estado para "case_elevator_stops"
 				ldi estado, 5
-				ldi counter, 0
+				// Resetando o contador
+				call Clear_counter
 
-			rjmp end_switch
-		case_elevator_ups:
+				rjmp end_switch_state
+
+			no_call:
+				ldi direction, 0
+
+			rjmp end_switch_state
+		case_elevator_ups_longjump:
 			// Verificando se já se passaram 3s
 			cpi counter, 3
-			brne end_switch
+			brne wait_elevator_ups_done
 
 			// Incrementando o andar atual
 			inc floor
 			// Atualizando o valor do display
 			call Update_display
 
-			// Mudando o estado para "case_new_floor" e resetando o contador
+			// Mudando o estado para "case_new_floor"
 			ldi estado, 4
-			ldi counter, 0
+			// Resetando o contador
+			call Clear_counter
 
-			rjmp end_switch
-		case_elevator_downs:
+			wait_elevator_ups_done:
+
+			rjmp end_switch_state
+		case_elevator_downs_longjump:
 			// Verificando se já se passaram 3s
 			cpi counter, 3
-			brne end_switch
+			brne wait_elevator_downs_done
 
 			// Decrementando o andar atual
 			dec floor
 			// Atualizando o valor do display
 			call Update_display
 
-			// Mudando o estado para "case_new_floor" e resetando o contador
+			// Mudando o estado para "case_new_floor"
 			ldi estado, 4
-			ldi counter, 0
+			// Resetando o contador
+			call Clear_counter
 
-			rjmp end_switch
-		case_new_floor:
+			wait_elevator_downs_done:
+
+			rjmp end_switch_state
+		case_new_floor_longjump:
 			// Comparando se o andar atual é o andar alvo
 			cp floor, next_floor
 			breq stop_elevator
@@ -498,54 +755,50 @@ MAIN:
 			// Caso não seja o andar alvo, voltar para "case_idle"
 			ldi estado, 1
 
-			rjmp end_switch
+			rjmp end_switch_state
 
 			stop_elevator:
-				// Caso seja o andar alvo, remover a chamada da fila
-				mov r17, floor
-				call Clear_call
-
 				// Caso seja o andar alvo, ir para o próximo estado "case_elevator_stops"
 				ldi estado, 5
 
-			rjmp end_switch
-		case_elevator_stops:
+			rjmp end_switch_state
+		case_elevator_stops_longjump:
 			// Verificando se o botão de fechar a porta foi pressionado
 			sbis PIND, pin_button_close_door
 			rjmp skip_close_door_a
 
-			// Mudando o estado para "case_next_destiny" e resetando o contador
+			// Mudando o estado para "case_next_destiny"
 			ldi estado, 8
-			ldi counter, 0
+			// Resetando o contador
+			call Clear_counter
 
-			rjmp end_switch
+			rjmp end_switch_state
 
 			skip_close_door_a:
 				// Ativando o led
 				sbi PORTC, pin_led
 
-				// Mudando o estado da porta
-				ldi door, 1
-
 				// Verificando se já se passaram 5s
 				cpi counter, 5
-				brne end_switch
+				brne end_switch_state
 
-				// Mudando o estado para "case_buzzer_warning" e resetando o contador
+				// Mudando o estado para "case_buzzer_warning"
 				ldi estado, 6
-				ldi counter, 0
+				// Resetando o contador
+				call Clear_counter
 
-			rjmp end_switch
-		case_buzzer_warning:
+			rjmp end_switch_state
+		case_buzzer_warning_longjump:
 			// Verificando se o botão de fechar a porta foi pressionado
 			sbis PIND, pin_button_close_door
 			rjmp skip_close_door_b
 
-			// Mudando o estado para "case_next_destiny" e resetando o contador
+			// Mudando o estado para "case_next_destiny"
 			ldi estado, 8
-			ldi counter, 0
+			// Resetando o contador
+			call Clear_counter
 
-			rjmp end_switch
+			rjmp end_switch_state
 
 			skip_close_door_b:
 				// Ativando o buzzer
@@ -553,14 +806,15 @@ MAIN:
 
 				// Verificando se já se passaram 5s
 				cpi counter, 5
-				brne end_switch
+				brne end_switch_state
 
-				// Mudando o estado para "case_holding_door" e resetando o contador
+				// Mudando o estado para "case_holding_door"
 				ldi estado, 7
-				ldi counter, 0
+				// Resetando o contador
+				call Clear_counter
 
-			rjmp end_switch
-		case_holding_door:
+			rjmp end_switch_state
+		case_holding_door_longjump:
 			// Verificando se o botão de abrir a porta está sendo pressionado
 			sbis PIND, pin_button_open_door
 			rjmp close_door
@@ -568,28 +822,25 @@ MAIN:
 			// Aplicando um delay para evitar o bounce
 			call Delay_20ms
 
-			rjmp end_switch
+			rjmp end_switch_state
 
 			close_door:
 				// Mudando estado para "case_next_destiny"
 				ldi estado, 8
 
-			rjmp end_switch
-		case_next_destiny:
+			rjmp end_switch_state
+		case_next_destiny_longjump:
 			// Desativando o buzzer e o led
 			cbi PORTC, pin_buzzer
 			cbi PORTC, pin_led
 
-			// Mudando o valor do registrador door
-			ldi door, 0
+			// Removendo a chamada da fila
+			call Clear_call
 
 			// Mudando estado para "case_idle"
 			ldi estado, 1
 
-			rjmp end_switch
-		case_default:
-			ldi estado, 1
-		end_switch:
+			rjmp end_switch_state
+		end_switch_state:
 		/* -------------------------------Cases------------------------------ */
-
 	rjmp MAIN
