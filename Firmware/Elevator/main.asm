@@ -185,9 +185,10 @@ Clear_call:
 
 /* ---Get next floor: Atribui ao registrador next_floor o novo andar alvo---- */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16, r17, r18, r19                                   */
-/* Defini��o da fun��o: void Get_next_floor()                                 */
-Get_next_floor:
+/* Registradores usados: r16, r17, r18, r19, r20                              */
+/* Defini��o da fun��o: int Get_next_floor()                                 */
+/* Retorno: r17 (andar com maior prioridade)                                  */
+Get_high_priority_floor:
 	push r16
 	push r17
 	push r18
@@ -236,9 +237,6 @@ Get_next_floor:
 			// Convertendo a posi��o encontrada para um andar (3 - posi��o)
 			sub r17, r18
 
-			// Salvando a nova posi��o no registrador new_floor
-			mov next_floor, r17
-
 			rjmp found_result
 
 			skip_direction_stop:
@@ -276,9 +274,6 @@ Get_next_floor:
 			// Convertendo a posi��o encontrada para um andar (3 - posi��o)
 			sub r17, r18
 
-			// Salvando a nova posi��o no registrador new_floor
-			mov next_floor, r17
-
 			rjmp found_result
 
 			skip_direction_up_internal:
@@ -312,9 +307,6 @@ Get_next_floor:
 			// Convertendo a posi��o encontrada para um andar (3 - posi��o)
 			sub r17, r18
 
-			// Salvando a nova posi��o no registrador new_floor
-			mov next_floor, r17
-
 			rjmp found_result
 
 			skip_direction_up_external:
@@ -346,9 +338,6 @@ Get_next_floor:
 			// Convertendo a posi��o encontrada para um andar (3 - posi��o)
 			sub r17, r18
 
-			// Salvando a nova posi��o no registrador new_floor
-			mov next_floor, r17
-
 			rjmp found_result
 
 			skip_direction_down:
@@ -359,7 +348,7 @@ Get_next_floor:
 		rjmp end_switch_direction
 	end_switch_direction:
 		
-	ldi next_floor, -1
+	ldi r17, -1
 
 	found_result:
 
@@ -667,6 +656,8 @@ MAIN:
 
 			call Get_next_floor
 
+			mov next_floor, r17
+
 			// Se n�o tiver chamada, ir para "no_call"
 			cpi next_floor, -1
 			breq no_call
@@ -747,8 +738,10 @@ MAIN:
 
 			rjmp end_switch_state
 		case_new_floor_longjump:
-			// Comparando se o andar atual � o andar alvo
-			cp global_current_floor, next_floor
+			call Get_next_floor
+
+			// Verificando se esse é o andar com maior prioridade
+			cp global_current_floor, r17
 			breq stop_elevator
 
 			// Caso n�o seja o andar alvo, voltar para "case_idle"
