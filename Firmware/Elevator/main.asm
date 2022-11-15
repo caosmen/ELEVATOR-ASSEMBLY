@@ -128,7 +128,7 @@ Add_call:
 	push global_temp
 	push floor_queue_position
 
-	// Copia o valor do andar chamado para gerar a posição na fila
+	// Copia o valor do andar chamado para converter em uma posição da fila
 	mov floor_queue_position, floor_called
 
 	// Aplica a função (3 - x) para converter o andar em uma posição da fila
@@ -146,8 +146,8 @@ Add_call:
 	// Lê o dado armazenado na posição da fila e salva no respectivo registrador
 	ld floor_queue_position, Z
 
-	// Salva no valor lido a chamada atual (interna: 0b10 ou externa: 0b01)
-	// O operador "or" para armazenar as chamadas internas e externas
+	// Salva no valor lido da chamada atual (interna: 0b10 ou externa: 0b01)
+	// O operador "or" é usado para mesclar e armazenar as chamadas internas e externas
 	or floor_queue_position, external_or_internal_floor
 
 	// Salva o novo valor na posição da fila
@@ -165,13 +165,14 @@ Add_call:
 
 /* -----------Clear Call: Limpa a chamada que foi executada da fila---------- */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (global_temp), r1                                */
+/* Registradores usados: r16 (global_temp), r17                               */
 /* Definição da função: void Clear_call()                                     */
 .def floor_queue_position = r17
 Clear_call:
 	push global_temp
+	push floor_queue_position
 
-	// Copia o valor do andar chamado para gerar a posição na fila
+	// Copia o valor do andar chamado para converter em uma posição da fila
 	mov floor_queue_position, global_current_floor
 
 	// Aplica a função (3 - x) para converter o andar em uma posição da fila
@@ -186,12 +187,11 @@ Clear_call:
 	add ZL, global_temp
 	sbci ZH, 0
 
-	// Realiza um clear na posição do andar na fila
-	clr floor_queue_position
-
 	// Salva o novo valor na posição da fila (limpa a posição da fila)
-	st Z, floor_queue_position
+	clr global_temp
+	st Z, global_temp
 
+	pop floor_queue_position
 	pop global_temp
 
 	ret
@@ -874,12 +874,14 @@ MAIN:
 		case_holding_door_longjump:
 			// Verifica se o botão de abrir a porta está sendo pressionado
 			sbis PIND, pin_button_open_door
+			// Caso o botão esteja sendo pressionado essa instrução é pulada
 			rjmp close_door
 		
-			// Aplica um delay para evitar o bounce
-			call Delay_20ms
+			hold_door:
+				// Aplica um delay para evitar o bounce
+				call Delay_20ms
 
-			rjmp end_switch_state
+				rjmp end_switch_state
 
 			close_door:
 				// Muda o estado para "case_next_destiny"
