@@ -23,11 +23,11 @@
 .def global_temp = r16
 
 // Registradores usados para armazenar as informações do elevador
-.def global_state = r20
-.def global_current_floor = r21
-.def global_next_floor = r22
-.def global_direction = r23
-.def global_counter = r24
+.def global_state = r21
+.def global_current_floor = r22
+.def global_next_floor = r23
+.def global_direction = r24
+.def global_counter = r25
 /* ------------------------Definição dos registradores----------------------- */
 
 /* -------------------------------------------------------------------------- */
@@ -214,7 +214,7 @@ Get_high_priority_floor:
 		// Desloca o ponteiro para a terceira posição
 		adiw Z, 3
 
-		// Inicializa a posição da fila no andar de maior prioridade (3º andar) (loop de 3 a 0)
+		// Inicializa o registrador da fila no andar de maior prioridade (3º andar) (loop de 3 a 0)
 		ldi floor_queue_position, 3
 		while_direction_stop:
 			// Verifica se já passou por todos os valores
@@ -243,15 +243,16 @@ Get_high_priority_floor:
 		rjmp end_switch_direction
 
 	case_direction_up:
+		// Desloca o ponteiro para a posição do andar na fila
 		clr global_temp
-		// Desloca o ponteiro para a posição do andar atual
+
 		add ZL, global_current_floor
 		adc ZH, global_temp
 
-		// Inicializa a posição da fila no andar atual
+		// Inicializa a posição da fila com o valor do registrador temporário (andar atual na fila)
 		mov floor_queue_position, global_current_floor
 		while_direction_up_internal:
-			// Verifica se já passou por todos os valores da fila (andares)
+			// Verifica se já passou por todos os valores
 			cpi floor_queue_position, 4
 			brge end_while_direction_up_internal
 
@@ -279,10 +280,10 @@ Get_high_priority_floor:
 		// Desloca o ponteiro para a terceira posição
 		adiw Z, 3
 
-		// Inicializa a posição da fila no andar de maior prioridade (3º andar) (loop de 3 ao andar atual)
+		// Inicializa a posição da fila com o andar de maior prioridade (3º andar)
 		ldi floor_queue_position, 3
 		while_direction_up_external:
-			// Verifica se já passou por todos os valores (andares)
+			// Verifica se já passou por todos os valores
 			cp floor_queue_position, global_current_floor
 			brlt end_while_direction_up_external
 
@@ -310,15 +311,16 @@ Get_high_priority_floor:
 		rjmp end_switch_direction
 
 	case_direction_down:
+		// Desloca o ponteiro para a posição do andar na fila
 		clr global_temp
-		// Desloca o ponteiro para a posição do andar atual
+
 		add ZL, global_current_floor
 		adc ZH, global_temp
 
-		// Inicializa a posição da fila no andar atual
+		// Inicializa a posição da fila com o andar atual na fila
 		mov floor_queue_position, global_current_floor
 		while_direction_down:
-			// Verifica se já passou por todos os valores (andares)
+			// Verificar se já passou por todos os valores
 			cpi floor_queue_position, 0
 			brlt end_while_direction_down
 
