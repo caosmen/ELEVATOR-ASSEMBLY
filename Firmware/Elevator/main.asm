@@ -99,7 +99,7 @@ OCI1A_Interrupt:
 /* ---------Clear counter: Zera o contador e o registrador de contagem------- */
 /* -------------------------------------------------------------------------- */
 /* Registradores usados: r16 (global_temp)                                    */
-/* Definição da função: void Clear_counter()                                  */
+/* Definição: void Clear_counter()                                            */
 Clear_counter:
 	push global_temp
 
@@ -118,12 +118,12 @@ Clear_counter:
 
 /* ----------------Add Call: Adiciona uma nova chamada na fila--------------- */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (global_temp)	                                  */
+/* Registradores usados: r16 (global_temp), r17, r18, r19                     */
+/* Definição: void Add_call(floor_called int, external_or_internal_floor int) */
+/* Argumentos: floor_called (r18), external_or_internal_floor (r19)			  */
 .def floor_queue_position = r17
 .def floor_called = r18
 .def external_or_internal_floor = r19
-/* Definição da função: void Add_call(floor int, location int)             	  */
-/* Argumentos: floor_called (r18), external_or_internal_floor (r19)			  */
 Add_call:
 	push global_temp
 	push floor_queue_position
@@ -165,9 +165,9 @@ Add_call:
 
 /* -----------Clear Call: Limpa a chamada que foi executada da fila---------- */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (global_temp)                                    */
+/* Registradores usados: r16 (global_temp), r1                                */
+/* Definição da função: void Clear_call()                                     */
 .def floor_queue_position = r17
-/* Definição da função: void Clear_call()                                  */
 Clear_call:
 	push global_temp
 
@@ -201,13 +201,14 @@ Clear_call:
 
 /* Get high priority floor: Atribui ao registrador next_floor o novo destino  */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (global_temp)		                              */
+/* Registradores usados: r16 (global_temp), r17, r18, r19, r20                */
+/* Registradores usados: r22 (global_current_floor), r24 (global_direction)   */
+/* Definição da função: int Get_next_floor()                                  */
+/* Retorno: r20 (andar com maior prioridade)                                  */
 .def high_floor = r17
 .def floor_queue_position = r18
 .def call_in_floor = r19
 .def next_destiny = r20
-/* Definição da função: int Get_next_floor()                                 */
-/* Retorno: r20 (andar com maior prioridade)                                 */
 Get_high_priority_floor:
 	push global_temp
 	push high_floor
@@ -399,7 +400,7 @@ Get_high_priority_floor:
 
 /* -------Update display: Uma subrotina que atualiza o andar no display------ */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (global_temp)                                    */
+/* Registradores usados: r16 (global_temp), r22 (global_current_floor)        */
 Update_display:
 	push global_temp
 
@@ -420,10 +421,10 @@ Update_display:
 /* -----------Delay 20ms: Uma subrotina que aciona um delay de 20ms---------- */
 /* -------------------------------------------------------------------------- */
 /* Registradores usados: r16 (global_temp), r17, r18                          */
-.def temp_2 = r17
-.def temp_3 = r18
 /* Assumindo que o clock é 16 Mhz, para 20 ms são necessários 320.000 ciclos  */
 /* CLOCK (16.0e6) * 20ms = CLOCK (16.0e6) * 0.02 = 320.000                    */
+.def temp_2 = r17
+.def temp_3 = r18
 Delay_20ms:
 	push global_temp
 	push temp_2
