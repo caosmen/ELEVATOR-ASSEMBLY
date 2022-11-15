@@ -1,0 +1,10 @@
+﻿Nome,Quantidade,Componente
+"U1",1," Arduino Uno R3"
+"SFECHAR PORTA, SABRIR PORTA, STERREO, S1o ANDAR, S2o ANDAR, S3o ANDAR, SEXT 3o ANDAR, SEXT 2o ANDAR, SEXT 1o ANDAR, SEXT TÉRREO",10," Botão"
+"Digit1",1,"Anodo Visor de sete segmentos"
+"PIEZO1",1," Piezo"
+"U3",1," Decodificador de sete segmentos"
+"DPORTA ABERTA",1,"Verde LED"
+"R4, R5, R1, R2, R3, R6, R7, R8, R9, R10",10,"10 kΩ Resistor"
+"R13",1,"470 Ω Resistor"
+"R14, R11, R15",3,"330 Ω Resistor"
