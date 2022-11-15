@@ -14,25 +14,25 @@
 #define PRESCALE_TIMER_A 0b101
 #define PRESCALE_DIV_TIMER_A 1024
 #define WGM_TIMER_A 0b0100
-
 /* ---------------------Definição das variáveis globais---------------------- */
-/* -------------------------------------------------------------------------- */
-/* ------------------------Definição dos registradores----------------------- */
 
+/* -------------------------------------------------------------------------- */
+
+/* ------------------------Definição dos registradores----------------------- */
 // Registrador para uso geral
-.def global_temp = R16
+.def global_temp = r16
 
-// Registradores usados para armazenar o estado do elevador
-.def global_state = r20
-.def global_current_floor = r21
-.def next_floor = r22
-.def direction = r23
-.def counter = r24
-
+// Registradores usados para armazenar as informações do elevador
+.def global_state = r21
+.def global_current_floor = r22
+.def global_next_floor = r23
+.def global_direction = r24
+.def global_counter = r25
 /* ------------------------Definição dos registradores----------------------- */
-/* -------------------------------------------------------------------------- */
-/* -------------------------Definição dos pinos usados----------------------- */
 
+/* -------------------------------------------------------------------------- */
+
+/* -------------------------Definição dos pinos usados----------------------- */
 .equ pin_button_external_floor_0 = PB5
 .equ pin_button_external_floor_1 = PB4
 .equ pin_button_external_floor_2 = PB3
@@ -48,60 +48,63 @@
 
 .equ pin_buzzer = PC5
 .equ pin_led = PC4
-
 /* -------------------------Definição dos pinos usados----------------------- */
-/* -------------------------------------------------------------------------- */
-/* -----------------------Definindo a fila das chamadas---------------------- */
 
+/* -------------------------------------------------------------------------- */
+
+/* -----------------------Definição da fila de chamadas---------------------- */
 .dseg
 queue: .BYTE 4
+/* -----------------------Definição da fila de chamadas---------------------- */
 
-/* -----------------------Definindo a fila das chamadas---------------------- */
 /* -------------------------------------------------------------------------- */
-/* -----------------------Alterando a mem�ria para cseg---------------------- */
 
+/* -----------------------Alteração da memória para cseg--------------------- */
 .cseg
 .org 0
+/* -----------------------Alteração da memória para cseg--------------------- */
 
-/* -----------------------Alterando a mem�ria para cseg---------------------- */
 /* -------------------------------------------------------------------------- */
-/* ------------------------Tabela de interrup��o (IVT)----------------------- */
 
+/* -------------------------Tabela de interrupção (IVT)---------------------- */
 rjmp SETUP
 .org OC1Aaddr
 jmp OCI1A_Interrupt
+/* -------------------------Tabela de interrupção (IVT)---------------------- */
 
-/* ------------------------Tabela de interrup��o (IVT)----------------------- */
 /* -------------------------------------------------------------------------- */
-/* --------------------------------Interrup��es------------------------------ */
 
+/* --------------------------------Interrupções------------------------------ */
 OCI1A_Interrupt:
 	push global_temp
 	in global_temp, SREG
 	push global_temp
 
 	// Incrementando o contador
-	inc counter
+	inc global_counter
 
 	pop global_temp
 	out SREG, global_temp
 	pop global_temp
 
 	reti
+/* --------------------------------Interrupções------------------------------ */
 
-/* --------------------------------Interrup��es------------------------------ */
 /* -------------------------------------------------------------------------- */
-/* -----------------------------------Fun��es-------------------------------- */
+
+
+/* ----------------------------------FUNÇÕES--------------------------------- */
+
 
 /* ---------Clear counter: Zera o contador e o registrador de contagem------- */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (temp)                                           */
-/* Defini��o da fun��o: void Clear_counter()                                  */
+/* Registradores usados: r16 (global_temp)                                    */
+/* Definição da função: void Clear_counter()                                  */
 Clear_counter:
 	push global_temp
 
 	// Zerando o contador
-	clr counter
+	clr global_counter
 
 	// Zerando o registrador de contagem
 	clr global_temp
@@ -111,426 +114,479 @@ Clear_counter:
 	pop global_temp
 
 	ret
+/* -------------------------------------------------------------------------- */
 
 /* ----------------Add Call: Adiciona uma nova chamada na fila--------------- */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16, r17, r18, r19                                   */
-/* Defini��o da fun��o: void Add_call(floor int, location int)                */
-/* Argumentos: floor (r18), location (r19)                                    */
+/* Registradores usados: r16 (global_temp)	                                  */
+.def floor_queue_position = r17
+.def floor_called = r18
+.def external_or_internal_floor = r19
+/* Definição da função: void Add_call(floor int, location int)             	  */
+/* Argumentos: floor_called (r18), external_or_internal_floor (r19)			  */
 Add_call:
-	push r16
-	push r17
+	push global_temp
+	push floor_queue_position
 
-	// Copia o valor do argumento floor (r18) para o registrador r17
-	mov r17, r18
+	// Copia o valor do andar chamado para gerar a posição na fila
+	mov floor_queue_position, floor_called
 
-	// Aplica a fun��o (3 - x) para converter o andar em uma posi��o da fila
-	ldi r16, 3
-	sub r16, r17
+	// Aplica a função (3 - x) para converter o andar em uma posição da fila
+	ldi global_temp, 3
+	sub global_temp, floor_queue_position
 
-	// Inicializa��o o ponteiro Z
+	// Inicialização do ponteiro Z
 	ldi ZL, low(queue)
 	ldi ZH, high(queue)
 
-	// Desloca o ponteiro para a posi��o do andar na fila
-	add ZL, r16
+	// Desloca o ponteiro para a posição do andar na fila
+	add ZL, global_temp
 	sbci ZH, 0
 
-	// L� o dado armazenado na posi��o da fila e salva no registrador r17
-	ld r17, Z
+	// Lê o dado armazenado na posição da fila e salva no respectivo registrador
+	ld floor_queue_position, Z
 
 	// Salva no valor lido a chamada atual (interna: 0b10 ou externa: 0b01)
 	// O operador "or" para armazenar as chamadas internas e externas
-	or r17, r19
+	or floor_queue_position, external_or_internal_floor
 
-	// Salva o novo valor na posi��o da fila
-	st Z, r17
+	// Salva o novo valor na posição da fila
+	st Z, floor_queue_position
 
-	pop r17
-	pop r16
+	pop floor_queue_position
+	pop global_temp
 
 	ret
+
+.undef floor_queue_position
+.undef floor_called
+.undef external_or_internal_floor
+/* -------------------------------------------------------------------------- */
 
 /* -----------Clear Call: Limpa a chamada que foi executada da fila---------- */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16, r17                                             */
-/* Defini��o da fun��o: void Clear_call()                                     */
+/* Registradores usados: r16 (global_temp)                                    */
+.def floor_queue_position = r17
+/* Definição da função: void Clear_call()                                  */
 Clear_call:
-	push r16
-
-	// Copia o valor do registrador floor para o registrador r17
-	mov r17, global_current_floor
-
-	// Aplica a fun��o (3 - x) para converter o andar em uma posi��o da fila
-	ldi r16, 3
-	sub r16, r17
-
-	// Inicializa��o o ponteiro Z
-	ldi ZL, low(queue)
-	ldi ZH, high(queue)
-
-	// Desloca o ponteiro para a posi��o do andar na fila
-	add ZL, r16
-	sbci ZH, 0
-
-	// Realiza um clear no registrador r17
-	clr r17
-
-	// Salva o novo valor na posi��o da fila (limpa a posi��o da fila)
-	st Z, r17
-
-	pop r16
-
-	ret
-
-/* ---Get next floor: Atribui ao registrador next_floor o novo andar alvo---- */
-/* -------------------------------------------------------------------------- */
-/* Registradores usados: r16, r17, r18, r19, r20                              */
-/* Defini��o da fun��o: int Get_next_floor()                                 */
-/* Retorno: r17 (andar com maior prioridade)                                  */
-Get_high_priority_floor:
-	push r16
-	push r17
-	push r18
-	push r19
-
-	// Copia o valor do registrador floor para o registrador r17
-	mov r17, global_current_floor
-
-	// Aplica a fun��o (3 - x) para converter o andar em uma posi��o da fila
-	ldi r16, 3
-	// Salvando no registrador r16 o andar (convertido para a posi��o na fila)
-	sub r16, r17
-
-	// Salvando o valor 3 no registrador r17 para converter a posi��o de retorno em um andar
-	ldi r17, 3
-
-	// Inicializa��o o ponteiro Z
-	ldi ZL, low(queue)
-	ldi ZH, high(queue)
-
-	// Switch case para a vari�vel direction
-	switch_direction:
-		cpi direction, 0
-		breq case_direction_stop
-		cpi direction, 1
-		breq case_direction_up
-		cpi direction, -1
-		breq case_direction_down
-
-	case_direction_stop:
-		// Inicializa o registrador r18 com zero (para realizar o loop de 0 a 3)
-		clr r18
-		while_direction_stop:
-			// Verificar se j� passou por todos os valores
-			cpi r18, 4
-			brge end_while_direction_stop
-
-			// L� a posi��o atual da fila
-			ld r19, Z+ 
-
-			// Verifica se existe uma chamada
-			cpi r19, 0
-			// Caso n�o exista ele pula o retorno
-			breq skip_direction_stop
-
-			// Convertendo a posi��o encontrada para um andar (3 - posi��o)
-			sub r17, r18
-
-			rjmp found_result
-
-			skip_direction_stop:
-				inc r18
-				rjmp while_direction_stop
-		end_while_direction_stop:
-
-		rjmp end_switch_direction
-	case_direction_up:
-		// Desloca o ponteiro para a posi��o do andar na fila
-		add ZL, r16
-		sbci ZH, 0
-
-		// Inicializa o registrador r18 com o valor do registrador 16 (andar atual na fila)
-		mov r18, r16
-		while_direction_up_internal:
-			// Verificar se j� passou por todos os valores
-			cpi r18, 0
-			brlt end_while_direction_up_internal
-
-			// L� a posi��o atual da fila
-			ld r19, Z
-
-			// Decrementa o ponteiro Z
-			subi ZL, 1
-			sbci ZH, 0
-
-			// Faz uma m�scara no bit referente a chamada interna
-			andi r19, 0b00000010
-			// Verifica se existe uma chamada interna
-			cpi r19, 0
-			// Caso n�o exista ele pula o retorno
-			breq skip_direction_up_internal
-
-			// Convertendo a posi��o encontrada para um andar (3 - posi��o)
-			sub r17, r18
-
-			rjmp found_result
-
-			skip_direction_up_internal:
-				dec r18
-				rjmp while_direction_up_internal
-		end_while_direction_up_internal:
-
-		// Reseta a posi��o do ponteiro Z
-		ldi ZL, low(queue)
-		ldi ZH, high(queue)
-
-		// Inicializa o registrador r18 com o valor zero
-		clr r18
-		// Incrementa o valor de r16 em 1
-		inc r16
-		while_direction_up_external:
-			// Verificar se j� passou por todos os valores
-			cp r18, r16
-			brge end_while_direction_up_external
-
-			// L� a posi��o atual da fila
-			ld r19, Z+
-
-			// Faz uma m�scara no bit referente a chamada externa
-			andi r19, 0b00000001
-			// Verifica se existe uma chamada externa
-			cpi r19, 0
-			// Caso n�o exista ele pula o retorno
-			breq skip_direction_up_external
-
-			// Convertendo a posi��o encontrada para um andar (3 - posi��o)
-			sub r17, r18
-
-			rjmp found_result
-
-			skip_direction_up_external:
-				inc r18
-				rjmp while_direction_up_external
-		end_while_direction_up_external:
-
-		rjmp end_switch_direction
-	case_direction_down:
-		// Desloca o ponteiro para a posi��o do andar na fila
-		add ZL, r16
-		sbci ZH, 0
-
-		// Inicializa o registrador r18 com o valor do registrador 16 (andar atual na fila)
-		mov r18, r16
-		while_direction_down:
-			// Verificar se j� passou por todos os valores
-			cpi r18, 4
-			brge end_while_direction_down
-
-			// L� a posi��o atual da fila
-			ld r19, Z+
-
-			// Verifica se existe uma chamada
-			cpi r19, 0
-			// Caso n�o exista ele pula o retorno
-			breq skip_direction_down
-
-			// Convertendo a posi��o encontrada para um andar (3 - posi��o)
-			sub r17, r18
-
-			rjmp found_result
-
-			skip_direction_down:
-				inc r18
-				rjmp while_direction_down
-		end_while_direction_down:
-
-		rjmp end_switch_direction
-	end_switch_direction:
-		
-	ldi r17, -1
-
-	found_result:
-
-	pop r19
-	pop r18
-	pop r17
-	pop r16
-
-	ret
-
-/* -------Update Display: Uma subrotina que atualiza o andar no display------ */
-/* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (temp)                                           */
-Update_display:
 	push global_temp
 
-	// Copiando o registrador floor para o registrador temp
-	mov global_temp, global_current_floor
-	// Movendo o andar atual para a posi��o do pino 2 e 3 da Porta D
-	lsl global_temp
-	lsl global_temp
+	// Copia o valor do andar chamado para gerar a posição na fila
+	mov floor_queue_position, global_current_floor
 
-	// Escrevendo o novo valor do display na Porta D
-	out PORTD, global_temp
+	// Aplica a função (3 - x) para converter o andar em uma posição da fila
+	ldi global_temp, 3
+	sub global_temp, floor_queue_position
+
+	// Inicialização do ponteiro Z
+	ldi ZL, low(queue)
+	ldi ZH, high(queue)
+
+	// Desloca o ponteiro para a posição do andar na fila
+	add ZL, global_temp
+	sbci ZH, 0
+
+	// Realiza um clear na posição do andar na fila
+	clr floor_queue_position
+
+	// Salva o novo valor na posição da fila (limpa a posição da fila)
+	st Z, floor_queue_position
 
 	pop global_temp
 
 	ret
 
-/* -----------Delay 20ms: Uma subrotina que aciona um delay de 20ms---------- */
+.undef floor_queue_position
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (temp), r17, r18                                 */
-/* Assumindo que o clock � 16Mhz, para 20ms s�o necess�rios 320.000 ciclos    */
-/* CLOCK (16.0e6) * 20ms = CLOCK (16.0e6) * 0.02 = 320.000                    */
-Delay_20ms:
-	push r16
-	push r17
-	push r18
 
-	// Calculando a quantidade de ciclos que o loop abaixo deve ser executado
-	// Como no loop cada itera��o vai consumir cinco ciclos, precisamos dividir os 320.000 ciclos por cinco
-	.equ required_cycles = int(CLOCK * 0.02 / 5.0)
+/* Get high priority floor: Atribui ao registrador next_floor o novo destino  */
+/* -------------------------------------------------------------------------- */
+/* Registradores usados: r16 (global_temp)		                              */
+.def high_floor = r17
+.def floor_queue_position = r18
+.def call_in_floor = r19
+.def next_destiny = r20
+/* Definição da função: int Get_next_floor()                                 */
+/* Retorno: r20 (andar com maior prioridade)                                 */
+Get_high_priority_floor:
+	push global_temp
+	push high_floor
+	push floor_queue_position
+	push call_in_floor
 
-	// Salvando os valores em tr�s registradores
-	ldi r18, byte3(required_cycles)
-	ldi r17, high(required_cycles)
-	ldi r16, low(required_cycles)
+	// Copia o valor do andar atual para o registrador de andar com maior prioridade
+	mov high_floor, global_current_floor
 
-	// Executando os 320.000 cliclos
-	subi r16, 1
-	sbci r17, 0
-	sbci r18, 0
-	brcc pc-3
+	// Aplica a função (3 - x) para converter o andar em uma posição da fila
+	ldi global_temp, 3
+	// Salva o andar no registrador temporário (convertido para a posição na fila)
+	sub global_temp, high_floor
 
-	pop r18
-	pop r17
-	pop r16
+	// Salva o valor 3 para converter a posição de retorno em um andar
+	ldi high_floor, 3
+
+	// Inicialização do ponteiro Z
+	ldi ZL, low(queue)
+	ldi ZH, high(queue)
+
+	// Switch case para os casos em que o elevador está parado, subindo ou descendo
+	switch_direction:
+		// Caso o elevador esteja parado
+		cpi global_direction, 0
+		breq case_direction_stop
+		// Caso o elevador esteja subindo
+		cpi global_direction, 1
+		breq case_direction_up
+		// Caso o elevador esteja descendo
+		cpi global_direction, -1
+		breq case_direction_down
+
+	case_direction_stop:
+		// Inicializa o registrador da fila dos andares com zero (para realizar o loop de 0 a 3)
+		clr floor_queue_position
+		while_direction_stop:
+			// Verifica se já passou por todos os valores
+			cpi floor_queue_position, 4
+			brge end_while_direction_stop
+
+			// Lê a posição atual da fila
+			ld call_in_floor, Z+ 
+
+			// Verifica se existe uma chamada
+			cpi call_in_floor, 0
+			// Caso não exista, ele pula o retorno e checa o próximo andar
+			breq skip_direction_stop
+
+			// Converte a posição encontrada em um andar (3 - posição)
+			sub high_floor, floor_queue_position
+
+			rjmp found_result
+
+			skip_direction_stop:
+				inc floor_queue_position
+				rjmp while_direction_stop
+		end_while_direction_stop:
+
+		rjmp end_switch_direction
+
+	case_direction_up:
+		// Desloca o ponteiro para a posição do andar na fila
+		add ZL, global_temp
+		sbci ZH, 0
+
+		// Inicializa a posição da fila com o valor do registrador temporário (andar atual na fila)
+		mov floor_queue_position, global_temp
+		while_direction_up_internal:
+			// Verifica se já passou por todos os valores
+			cpi floor_queue_position, 0
+			brlt end_while_direction_up_internal
+
+			// Lê a posição atual da fila
+			ld call_in_floor, Z
+
+			// Decrementa o ponteiro Z
+			subi ZL, 1
+			sbci ZH, 0
+
+			// Faz uma máscara no bit referente à chamada interna
+			andi call_in_floor, 0b00000010
+			// Verifica se existe uma chamada interna
+			cpi call_in_floor, 0
+			// Caso não exista, ele pula o retorno e checa o próximo andar
+			breq skip_direction_up_internal
+
+			// Converte a posição encontrada em um andar (3 - posição)
+			sub high_floor, floor_queue_position
+
+			rjmp found_result
+
+			skip_direction_up_internal:
+				dec floor_queue_position
+				rjmp while_direction_up_internal
+		end_while_direction_up_internal:
+
+		// Reseta a posição do ponteiro Z
+		ldi ZL, low(queue)
+		ldi ZH, high(queue)
+
+		// Inicializa a posição da fila com o valor zero
+		clr floor_queue_position
+		// Incrementa o valor do registrador temporário em 1
+		inc global_temp
+		while_direction_up_external:
+			// Verifica se já passou por todos os valores
+			cp floor_queue_position, global_temp
+			brge end_while_direction_up_external
+
+			// Lê a posição atual da fila
+			ld call_in_floor, Z+
+
+			// Faz uma máscara no bit referente à chamada externa
+			andi call_in_floor, 0b00000001
+			// Verifica se existe uma chamada externa
+			cpi call_in_floor, 0
+			// Caso não exista, ele pula o retorno e checa o próximo andar
+			breq skip_direction_up_external
+
+			// Converte a posição encontrada em um andar (3 - posição)
+			sub high_floor, floor_queue_position
+
+			rjmp found_result
+
+			skip_direction_up_external:
+				inc floor_queue_position
+				rjmp while_direction_up_external
+		end_while_direction_up_external:
+
+		rjmp end_switch_direction
+
+	case_direction_down:
+		// Desloca o ponteiro para a posição do andar na fila
+		add ZL, global_temp
+		sbci ZH, 0
+
+		// Inicializa a posição da fila com o andar atual na fila
+		mov floor_queue_position, global_temp
+		while_direction_down:
+			// Verificar se já passou por todos os valores
+			cpi floor_queue_position, 4
+			brge end_while_direction_down
+
+			// Lê a posição atual da fila
+			ld call_in_floor, Z+
+
+			// Verifica se existe uma chamada
+			cpi call_in_floor, 0
+			// Caso não exista, ele pula o retorno e checa o próximo andar
+			breq skip_direction_down
+
+			// Converte a posição encontrada para um andar (3 - posição)
+			sub high_floor, floor_queue_position
+
+			rjmp found_result
+
+			skip_direction_down:
+				inc floor_queue_position
+				rjmp while_direction_down
+		end_while_direction_down:
+
+		rjmp end_switch_direction
+	end_switch_direction:
+
+	// Não encontrou nenhum andar para ir
+	ldi next_destiny, -1
+	rjmp not_found_result
+
+	found_result:
+		// Atribui o andar encontrado ao destino
+		mov next_destiny, high_floor
+
+	not_found_result:
+		
+
+	pop call_in_floor
+	pop floor_queue_position
+	pop high_floor
+	pop global_temp
 
 	ret
 
-/* -----------------------------------Fun��es-------------------------------- */
+.undef high_floor
+.undef floor_queue_position
+.undef call_in_floor
+.undef next_destiny
+/* -------------------------------------------------------------------------- */
 
+/* -------Update display: Uma subrotina que atualiza o andar no display------ */
+/* -------------------------------------------------------------------------- */
+/* Registradores usados: r16 (global_temp)                                    */
+Update_display:
+	push global_temp
+
+	// Copia o andar atual para o registrador temporário
+	mov global_temp, global_current_floor
+	// Move o andar atual para a posição do pino 2 e 3 da Porta D
+	lsl global_temp
+	lsl global_temp
+
+	// Escreve o novo valor do display na Porta D
+	out PORTD, global_temp
+
+	pop global_temp
+
+	ret
+/* -------------------------------------------------------------------------- */
+
+/* -----------Delay 20ms: Uma subrotina que aciona um delay de 20ms---------- */
+/* -------------------------------------------------------------------------- */
+/* Registradores usados: r16 (global_temp), r17, r18                          */
+.def temp_2 = r17
+.def temp_3 = r18
+/* Assumindo que o clock é 16 Mhz, para 20 ms são necessários 320.000 ciclos  */
+/* CLOCK (16.0e6) * 20ms = CLOCK (16.0e6) * 0.02 = 320.000                    */
+Delay_20ms:
+	push global_temp
+	push temp_2
+	push temp_3
+
+	// Calcula a quantidade de ciclos que o loop abaixo deve ser executado
+	// Como no loop cada iteração vai consumir cinco ciclos, precisamos dividir os 320.000 ciclos por cinco
+	.equ required_cycles = int(CLOCK * 0.02 / 5.0)
+
+	// Salva os valores em três registradores
+	ldi temp_3, byte3(required_cycles)
+	ldi temp_2, high(required_cycles)
+	ldi global_temp, low(required_cycles)
+
+	// Executa os 320.000 cliclos
+	subi global_temp, 1
+	sbci temp_2, 0
+	sbci temp_3, 0
+	brcc pc-3
+
+	pop temp_3
+	pop temp_2
+	pop global_temp
+
+	ret
+
+.undef temp_2
+.undef temp_3
+/* -------------------------------------------------------------------------- */
+
+/* ----------------------------------FUNÇÕES--------------------------------- */
+
+/* -----------------------------CONFIGURAÇÃO INICIAL ------------------------ */
 SETUP:
-	/* ------------------------Inicializa��o da pilha------------------------ */
-
+	/* ------------------------Inicialização da pilha------------------------ */
 	ldi global_temp, high(RAMEND)
 	out SPH, global_temp
 	ldi global_temp, low(RAMEND)
 	out SPL, global_temp
+	/* ------------------------Inicialização da pilha------------------------ */
 
-	/* ------------------------Inicializa��o da pilha------------------------ */
 	/* ---------------------------------------------------------------------- */
-	/* ---------------------Defini��o das portas B, D e C-------------------- */
+
+	/* ---------------------Definição das portas B, D e C-------------------- */
 
 	/* Porta B                                                                */
 	/*                                                                        */
-	/* PB5 = Andar 0 (Bot�es externos) - Entrada                              */
-	/* PB4 = Andar 1 (Bot�es externos) - Entrada                              */
-	/* PB3 = Andar 2 (Bot�es externos) - Entrada                              */
-	/* PB2 = Andar 3 (Bot�es externos) - Entrada                              */
-	/* PB1 = Andar 0 (Bot�es internos) - Entrada                              */
-	/* PB0 = Andar 1 (Bot�es internos) - Entrada                              */
+	/* PB5 = Andar 0 (Botões externos) - Entrada                              */
+	/* PB4 = Andar 1 (Botões externos) - Entrada                              */
+	/* PB3 = Andar 2 (Botões externos) - Entrada                              */
+	/* PB2 = Andar 3 (Botões externos) - Entrada                              */
+	/* PB1 = Andar 0 (Botões internos) - Entrada                              */
+	/* PB0 = Andar 1 (Botões internos) - Entrada                              */
 	ldi global_temp, 0b00000000
 
-	// Configurando a Porta B
+	// Configura a Porta B
 	out DDRB, global_temp
 
 	/* Porta D                                                                */
 	/*                                                                        */
-	/* PD7 = Andar 2 (Bot�es internos) - Entrada                              */
-	/* PD6 = Andar 3 (Bot�es internos) - Entrada                              */
-	/* PD5 = Abrir Porta - Entrada                                            */
-	/* PD4 = Fechar Porta - Entrada                                           */
-	/* PD3 = Display 7 segmentos (Entrada B) - Sa�da                          */
-	/* PD2 = Display 7 segmentos (Entrada A) - Sa�da                          */
+	/* PD7 = Andar 2 (Botões internos) - Entrada                              */
+	/* PD6 = Andar 3 (Botões internos) - Entrada                              */
+	/* PD5 = Abrir Porta			   - Entrada                              */
+	/* PD4 = Fechar Porta 			   - Entrada                              */
+	/* PD3 = Display 7 seg (Entrada B) - Saída     		                      */
+	/* PD2 = Display 7 seg (Entrada A) - Saída         		                  */
 	ldi global_temp, 0b00001100
 
-	// Configurando a Porta D
+	// Configura a Porta D
 	out DDRD, global_temp
 
 	/* Porta C                                                                */
 	/*                                                                        */
-	/* PC5 = Buzzer - Sa�da                                                   */
-	/* PC4 = Led - Sa�da                                                      */
+	/* PC5 = Buzzer 				   - Saída                                */
+	/* PC4 = Led 					   - Saída                                */
 	ldi global_temp, 0b00110000
 
-	// Configurando a Porta C
+	// Configura a Porta C
 	out DDRC, global_temp
+	/* ---------------------Definição das portas B, D e C-------------------- */
 
-	/* ---------------------Defini��o das portas B, D e C-------------------- */
 	/* ---------------------------------------------------------------------- */
-	/* -------------Definindo o estado inicial dos pinos de Sa�da------------ */
+
+	/* ------------Definição do estado inicial dos pinos de Saída------------ */
 
 	/* Porta C                                                                */
 	/*                                                                        */
-	/* PC5 = Buzzer - 0                                                       */
-	/* PC4 = Led - 0                                                          */
+	/* PC5 = Buzzer 					- 0                                   */
+	/* PC4 = Led 						- 0                                   */
 	cbi PORTC, pin_buzzer
 	cbi PORTC, pin_led
+	/* ------------Definição do estado inicial dos pinos de Saída------------ */
 
-	/* -------------Definindo o estado inicial dos pinos de Sa�da------------ */
 	/* ---------------------------------------------------------------------- */
-	/* --------------Definindo o estado inicial dos registradores------------ */
 
-	// Atribuindo os valores aos registradores
+	/* -------------Definição do estado inicial dos registradores------------ */
+
+	// Atribui os valores aos registradores
 	ldi global_state, 1
 	ldi global_current_floor, 0
-	ldi next_floor, -1
-	ldi direction, 0
-	ldi counter, 0
+	ldi global_next_floor, -1
+	ldi global_direction, 0
+	ldi global_counter, 0
 
-	// Atualizando o display para o andar inicial
+	// Atualiza o display para o andar inicial
 	call Update_display
+	/* -------------Definição do estado inicial dos registradores------------ */
 
-	/* --------------Definindo o estado inicial dos registradores------------ */
 	/* ---------------------------------------------------------------------- */
-	/* -------------------------Inicializando a fila------------------------- */
 
+	/* -------------------------Inicialização da fila------------------------ */
 	ldi global_temp, 0
 
 	sts queue, global_temp
 	sts queue + 1, global_temp
 	sts queue + 2, global_temp
 	sts queue + 3, global_temp
+	/* -------------------------Inicialização da fila------------------------ */
 
-	/* -------------------------Inicializando a fila------------------------- */
 	/* ---------------------------------------------------------------------- */
-	/* ------------------------Configura��o do Timer A----------------------- */
+
+	/* ------------------------Configuração do Timer A----------------------- */
 	
-	// Calculando o valor para o TOP
+	// Calcula o valor para o TOP
 	.equ TOP = int(0.5 + ((CLOCK / PRESCALE_DIV_TIMER_A) * DELAY_TIMER_A))
 
-	// Validando se ele est� dentro do limite esperado (65.532)
+	// Valida se ele está dentro do limite esperado (65.535)
 	.if TOP > 65535
 	.error "TOP is out of range"
 	.endif
 
-	// Atribuindo o valor de compara��o (TOP)
+	// Atribui o valor de comparação (TOP)
 	ldi global_temp, high(TOP)
 	sts OCR1AH, global_temp
 	ldi global_temp, low(TOP)
 	sts OCR1AL, global_temp
 
-	// Atribuindo o valor para o modo de opera��o (WGM)
+	// Atribui o valor para o modo de operação (WGM)
 	ldi global_temp, ((WGM_TIMER_A & 0b11) << WGM10)
 	sts TCCR1A, global_temp
 	ldi global_temp, ((WGM_TIMER_A >> 2) << WGM12) | (PRESCALE_TIMER_A << CS10)
 	sts TCCR1B, global_temp
 
-	// Habilita o bit na posi��o OCIE1A
+	// Habilita o bit na posição OCIE1A
 	lds global_temp, TIMSK1
 	sbr global_temp, 1 << OCIE1A
 	sts TIMSK1, global_temp
 
 	sei
-
-	/* ------------------------Configura��o do Timer A----------------------- */
+	/* ------------------------Configuração do Timer A----------------------- */
 
 	rjmp MAIN
+/* -----------------------------CONFIGURAÇÃO INICIAL ------------------------ */
 
+/* -------------------------------------------------------------------------- */
+
+/* ---------------------------FUNCIONAMENTO PRINCIPAL------------------------ */
 MAIN:
-	/* ----------------Leitura dos bot�es (internos e externos)-------------- */
+	.def floor_called = r18
+	.def external_or_internal_floor = r19
+	.def next_destiny = r20
+
+	/* ----------------Leitura dos botões (internos e externos)-------------- */
 	sbic PINB, pin_button_external_floor_0
 	rjmp button_external_floor_0_pressed
 
@@ -554,65 +610,67 @@ MAIN:
 
 	sbic PIND, pin_button_internal_floor_3
 	rjmp button_internal_floor_3_pressed
-	/* ----------------Leitura dos bot�es (internos e externos)-------------- */
+	/* ----------------Leitura dos botões (internos e externos)-------------- */
 
 	rjmp switch_state
 
-	/* -------Preparando os atributos para executar a fun��o (Add_call)------ */
+	/* ------Preparação dos atributos para executar a função (Add_call)------ */
 	button_external_floor_0_pressed:
-		ldi r18, 0
-		ldi r19, 1
+		ldi floor_called, 0
+		ldi external_or_internal_floor, 1
 		
 		rjmp button_pressed
 
 	button_external_floor_1_pressed:
-		ldi r18, 1
-		ldi r19, 1
+		ldi floor_called, 1
+		ldi external_or_internal_floor, 1
 		
 		rjmp button_pressed
 
 	button_external_floor_2_pressed:
-		ldi r18, 2
-		ldi r19, 1
+		ldi floor_called, 2
+		ldi external_or_internal_floor, 1
 		
 		rjmp button_pressed
 
 	button_external_floor_3_pressed:
-		ldi r18, 3
-		ldi r19, 1
+		ldi floor_called, 3
+		ldi external_or_internal_floor, 1
 		
 		rjmp button_pressed
 
 	button_internal_floor_0_pressed:
-		ldi r18, 0
-		ldi r19, 2
+		ldi floor_called, 0
+		ldi external_or_internal_floor, 2
 		
 		rjmp button_pressed
 
 	button_internal_floor_1_pressed:
-		ldi r18, 1
-		ldi r19, 2
+		ldi floor_called, 1
+		ldi external_or_internal_floor, 2
 		
 		rjmp button_pressed
 
 	button_internal_floor_2_pressed:
-		ldi r18, 2
-		ldi r19, 2
+		ldi floor_called, 2
+		ldi external_or_internal_floor, 2
 		
 		rjmp button_pressed
 
 	button_internal_floor_3_pressed:
-		ldi r18, 3
-		ldi r19, 2
+		ldi floor_called, 3
+		ldi external_or_internal_floor, 2
 		
 		rjmp button_pressed
 
 	button_pressed:
 		call Add_call
 		call Delay_20ms
-	/* -------Preparando os atributos para executar a fun��o (Add_call)------ */
+	/* ------Preparação dos atributos para executar a função (Add_call)------ */
+
 	/* ---------------------------------------------------------------------- */
-	/* -------------------------In�cio switch(estado)------------------------ */
+
+	/* -------------------------Início switch (estado)----------------------- */
 	switch_state:
 		cpi global_state, 1
 		breq case_idle
@@ -648,191 +706,203 @@ MAIN:
 		case_next_destiny:
 			rjmp case_next_destiny_longjump
 
-		/* -------------------------------Cases------------------------------ */
+		/* -------------------------------CASOS----------------------------- */
 		case_idle_longjump:
-			// Verificando se o bot�o de abrir a porta est� sendo pressionado
+			// Verifica se o botão de abrir a porta está sendo pressionado
 			sbic PIND, pin_button_open_door
 			rjmp call_in_current_floor
 
-			call Get_next_floor
+			// Verifica o andar com maior prioridade
+			call Get_high_priority_floor
+			mov global_next_floor, next_destiny
 
-			mov next_floor, r17
-
-			// Se n�o tiver chamada, ir para "no_call"
-			cpi next_floor, -1
+			// Se não tiver chamada, ir para "no_call"
+			cpi global_next_floor, -1
 			breq no_call
 
 			// Se a chamada for no andar atual, ir para "call_in_current_floor"
-			cp next_floor, global_current_floor
+			cp global_next_floor, global_current_floor
 			breq call_in_current_floor
 
 			// Se a chamada for para subir, ir para "call_up"
-			cp next_floor, global_current_floor
+			cp global_next_floor, global_current_floor
 			brge call_up
 
 			call_down:
-				ldi direction, -1
-				// Mudando o estado para "case_elevator_downs"
+				ldi global_direction, -1
+				// Muda o estado para "case_elevator_downs"
 				ldi global_state, 3
-				// Resetando o contador
+				// Reseta o contador
 				call Clear_counter
 
 				rjmp end_switch_state
 
 			call_up:
-				ldi direction, 1
-				// Mudando o estado para "case_elevator_ups"
+				ldi global_direction, 1
+				// Muda o estado para "case_elevator_ups"
 				ldi global_state, 2
-				// Resetando o contador
+				// Reseta o contador
 				call Clear_counter
 
 				rjmp end_switch_state
 
 			call_in_current_floor:
-				ldi direction, 0
-				// Mudando o estado para "case_elevator_stops"
+				ldi global_direction, 0
+				// Muda o estado para "case_elevator_stops"
 				ldi global_state, 5
-				// Resetando o contador
+				// Reseta o contador
 				call Clear_counter
 
 				rjmp end_switch_state
 
 			no_call:
-				ldi direction, 0
+				ldi global_direction, 0
 
 			rjmp end_switch_state
+
 		case_elevator_ups_longjump:
-			// Verificando se j� se passaram 3s
-			cpi counter, 3
+			// Verifica se já se passaram 3s
+			cpi global_counter, 3
 			brne wait_elevator_ups_done
 
-			// Incrementando o andar atual
+			// Incrementa o andar atual
 			inc global_current_floor
-			// Atualizando o valor do display
+			// Atualiza o valor do display
 			call Update_display
 
-			// Mudando o estado para "case_new_floor"
+			// Muda o estado para "case_new_floor"
 			ldi global_state, 4
-			// Resetando o contador
+			// Reseta o contador
 			call Clear_counter
 
 			wait_elevator_ups_done:
 
 			rjmp end_switch_state
+
 		case_elevator_downs_longjump:
-			// Verificando se j� se passaram 3s
-			cpi counter, 3
+			// Verifica se já se passaram 3s
+			cpi global_counter, 3
 			brne wait_elevator_downs_done
 
-			// Decrementando o andar atual
+			// Decrementa o andar atual
 			dec global_current_floor
-			// Atualizando o valor do display
+			// Atualiza o valor do display
 			call Update_display
 
-			// Mudando o estado para "case_new_floor"
+			// Muda o estado para "case_new_floor"
 			ldi global_state, 4
-			// Resetando o contador
+			// Reseta o contador
 			call Clear_counter
 
 			wait_elevator_downs_done:
 
 			rjmp end_switch_state
-		case_new_floor_longjump:
-			call Get_next_floor
 
-			// Verificando se esse é o andar com maior prioridade
-			cp global_current_floor, r17
+		case_new_floor_longjump:
+			call Get_high_priority_floor
+
+			// Verifica se esse é o andar com maior prioridade
+			cp global_current_floor, next_destiny
 			breq stop_elevator
 
-			// Caso n�o seja o andar alvo, voltar para "case_idle"
+			// Caso não seja o andar alvo, voltar para "case_idle"
 			ldi global_state, 1
 
 			rjmp end_switch_state
 
 			stop_elevator:
-				// Caso seja o andar alvo, ir para o pr�ximo estado "case_elevator_stops"
+				// Caso seja o andar alvo, vai para o próximo estado "case_elevator_stops"
 				ldi global_state, 5
 
 			rjmp end_switch_state
+
 		case_elevator_stops_longjump:
-			// Verificando se o bot�o de fechar a porta foi pressionado
+			// Verifica se o botão de fechar a porta foi pressionado
 			sbis PIND, pin_button_close_door
 			rjmp skip_close_door_a
 
-			// Mudando o estado para "case_next_destiny"
+			// Muda o estado para "case_next_destiny"
 			ldi global_state, 8
-			// Resetando o contador
+			// Reseta o contador
 			call Clear_counter
 
 			rjmp end_switch_state
 
 			skip_close_door_a:
-				// Ativando o led
+				// Ativa o led
 				sbi PORTC, pin_led
 
-				// Verificando se j� se passaram 5s
-				cpi counter, 5
+				// Verifica se já se passaram 5s
+				cpi global_counter, 5
 				brne end_switch_state
 
-				// Mudando o estado para "case_buzzer_warning"
+				// Muda o estado para "case_buzzer_warning"
 				ldi global_state, 6
-				// Resetando o contador
+				// Reseta o contador
 				call Clear_counter
 
 			rjmp end_switch_state
+
 		case_buzzer_warning_longjump:
-			// Verificando se o bot�o de fechar a porta foi pressionado
+			// Verifica se o botão de fechar a porta foi pressionado
 			sbis PIND, pin_button_close_door
 			rjmp skip_close_door_b
 
-			// Mudando o estado para "case_next_destiny"
+			// Muda o estado para "case_next_destiny"
 			ldi global_state, 8
-			// Resetando o contador
+			// Reseta o contador
 			call Clear_counter
 
 			rjmp end_switch_state
 
 			skip_close_door_b:
-				// Ativando o buzzer
+				// Ativa o buzzer
 				sbi PORTC, pin_buzzer
 
-				// Verificando se j� se passaram 5s
-				cpi counter, 5
+				// Verifica se já se passaram 5s
+				cpi global_counter, 5
 				brne end_switch_state
 
-				// Mudando o estado para "case_holding_door"
+				// Muda o estado para "case_holding_door"
 				ldi global_state, 7
-				// Resetando o contador
+				// Reseta o contador
 				call Clear_counter
 
 			rjmp end_switch_state
+
 		case_holding_door_longjump:
-			// Verificando se o bot�o de abrir a porta est� sendo pressionado
+			// Verifica se o botão de abrir a porta está sendo pressionado
 			sbis PIND, pin_button_open_door
 			rjmp close_door
 		
-			// Aplicando um delay para evitar o bounce
+			// Aplica um delay para evitar o bounce
 			call Delay_20ms
 
 			rjmp end_switch_state
 
 			close_door:
-				// Mudando estado para "case_next_destiny"
+				// Muda o estado para "case_next_destiny"
 				ldi global_state, 8
 
 			rjmp end_switch_state
+
 		case_next_destiny_longjump:
-			// Desativando o buzzer e o led
+			// Desativa o buzzer e o led
 			cbi PORTC, pin_buzzer
 			cbi PORTC, pin_led
 
-			// Removendo a chamada da fila
+			// Remove a chamada da fila
 			call Clear_call
 
-			// Mudando estado para "case_idle"
+			// Muda o estado para "case_idle"
 			ldi global_state, 1
 
 			rjmp end_switch_state
 		end_switch_state:
-		/* -------------------------------Cases------------------------------ */
+		/* -------------------------------CASOS----------------------------- */
+
+		.undef floor_called
+		.undef external_or_internal_floor
+		.undef next_destiny
+
 	rjmp MAIN
