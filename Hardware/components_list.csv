@@ -7,4 +7,4 @@
 "DPORTA ABERTA",1,"Verde LED"
 "R4, R5, R1, R2, R3, R6, R7, R8, R9, R10",10,"10 kΩ Resistor"
 "R13",1,"470 Ω Resistor"
-"R14, R11, R15",3,"330 Ω Resistor"
+"R14, R15",2,"330 Ω Resistor"
