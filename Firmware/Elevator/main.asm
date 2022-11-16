@@ -11,8 +11,8 @@
 #define CLOCK 16.0e6 
 #define DELAY_TIMER_A 1.0
 
-#define PRESCALE_TIMER_A 0b101
-#define PRESCALE_DIV_TIMER_A 1024
+#define PRESCALE_TIMER_A 0b100
+#define PRESCALE_DIV_TIMER_A 256
 #define WGM_TIMER_A 0b0100
 /* ---------------------Definição das variáveis globais---------------------- */
 
@@ -224,10 +224,6 @@ Get_high_priority_floor:
 			// Lê a posição atual da fila
 			ld call_in_floor, Z
 
-			// Decrementa o ponteiro Z
-			subi ZL, 1
-			sbci ZH, 0
-
 			// Verifica se existe uma chamada
 			cpi call_in_floor, 0
 			// Caso não exista, ele pula o retorno e checa o próximo andar
@@ -236,7 +232,13 @@ Get_high_priority_floor:
 			rjmp found_result
 
 			skip_direction_stop:
+				// Decrementa a posição
 				dec floor_queue_position
+
+				// Decrementa o ponteiro Z
+				subi ZL, 1
+				sbci ZH, 0
+
 				rjmp while_direction_stop
 		end_while_direction_stop:
 
@@ -289,10 +291,6 @@ Get_high_priority_floor:
 			// Lê a posição atual da fila
 			ld call_in_floor, Z
 
-			// Decrementa o ponteiro Z
-			subi ZL, 1
-			sbci ZH, 0
-
 			// Faz uma máscara no bit referente à chamada externa
 			andi call_in_floor, 0b00000001
 			// Verifica se existe uma chamada externa
@@ -303,7 +301,13 @@ Get_high_priority_floor:
 			rjmp found_result
 
 			skip_direction_up_external:
+				// Decrementa a posição
 				dec floor_queue_position
+
+				// Decrementa o ponteiro Z
+				subi ZL, 1
+				sbci ZH, 0
+
 				rjmp while_direction_up_external
 		end_while_direction_up_external:
 
@@ -325,10 +329,6 @@ Get_high_priority_floor:
 			// Lê a posição atual da fila
 			ld call_in_floor, Z
 
-			// Decrementa o ponteiro Z
-			subi ZL, 1
-			sbci ZH, 0
-
 			// Verifica se existe uma chamada
 			cpi call_in_floor, 0
 			// Caso não exista, ele pula o retorno e checa o próximo andar
@@ -337,7 +337,13 @@ Get_high_priority_floor:
 			rjmp found_result
 
 			skip_direction_down:
+				// Decrementa a posição
 				dec floor_queue_position
+
+				// Decrementa o ponteiro Z
+				subi ZL, 1
+				sbci ZH, 0
+
 				rjmp while_direction_down
 		end_while_direction_down:
 
@@ -549,11 +555,10 @@ SETUP:
 /* -------------------------------------------------------------------------- */
 
 /* ---------------------------FUNCIONAMENTO PRINCIPAL------------------------ */
+.def floor_called = r17
+.def external_or_internal_floor = r18
+.def next_destiny = r19
 MAIN:
-	.def floor_called = r17
-	.def external_or_internal_floor = r18
-	.def next_destiny = r19
-
 	/* ----------------Leitura dos botões (internos e externos)-------------- */
 	sbic PINB, pin_button_external_floor_0
 	rjmp button_external_floor_0_pressed
@@ -871,8 +876,8 @@ MAIN:
 		end_switch_state:
 		/* -------------------------------CASOS----------------------------- */
 
-		.undef floor_called
-		.undef external_or_internal_floor
-		.undef next_destiny
-
 	rjmp MAIN
+
+.undef floor_called
+.undef external_or_internal_floor
+.undef next_destiny
