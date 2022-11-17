@@ -11,8 +11,8 @@
 #define CLOCK 16.0e6 
 #define DELAY_TIMER_A 1.0
 
-#define PRESCALE_TIMER_A 0b101
-#define PRESCALE_DIV_TIMER_A 1024
+#define PRESCALE_TIMER_A 0b100
+#define PRESCALE_DIV_TIMER_A 256
 #define WGM_TIMER_A 0b0100
 /* ---------------------Definição das variáveis globais---------------------- */
 
@@ -23,11 +23,11 @@
 .def global_temp = r16
 
 // Registradores usados para armazenar as informações do elevador
-.def global_state = r21
-.def global_current_floor = r22
-.def global_next_floor = r23
-.def global_direction = r24
-.def global_counter = r25
+.def global_state = r20
+.def global_current_floor = r21
+.def global_next_floor = r22
+.def global_direction = r23
+.def global_counter = r24
 /* ------------------------Definição dos registradores----------------------- */
 
 /* -------------------------------------------------------------------------- */
@@ -74,7 +74,7 @@ jmp OCI1A_Interrupt
 
 /* -------------------------------------------------------------------------- */
 
-/* --------------------------------Interrupções------------------------------ */
+/* --------------------------------INTERRUPÇÕES------------------------------ */
 OCI1A_Interrupt:
 	push global_temp
 	in global_temp, SREG
@@ -88,7 +88,7 @@ OCI1A_Interrupt:
 	pop global_temp
 
 	reti
-/* --------------------------------Interrupções------------------------------ */
+/* --------------------------------INTERRUPÇÕES------------------------------ */
 
 /* -------------------------------------------------------------------------- */
 
@@ -118,113 +118,81 @@ Clear_counter:
 
 /* ----------------Add Call: Adiciona uma nova chamada na fila--------------- */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (global_temp), r17, r18, r19                     */
+/* Registradores usados: r16 (global_temp), r17, r18                          */
 /* Definição: void Add_call(floor_called int, external_or_internal_floor int) */
-/* Argumentos: floor_called (r18), external_or_internal_floor (r19)			  */
-.def floor_queue_position = r17
-.def floor_called = r18
-.def external_or_internal_floor = r19
+/* Argumentos: floor_called (r17), external_or_internal_floor (r18)			  */
+.def floor_called = r17
+.def external_or_internal_floor = r18
 Add_call:
 	push global_temp
-	push floor_queue_position
-
-	// Copia o valor do andar chamado para gerar a posição na fila
-	mov floor_queue_position, floor_called
-
-	// Aplica a função (3 - x) para converter o andar em uma posição da fila
-	ldi global_temp, 3
-	sub global_temp, floor_queue_position
 
 	// Inicialização do ponteiro Z
 	ldi ZL, low(queue)
 	ldi ZH, high(queue)
 
 	// Desloca o ponteiro para a posição do andar na fila
-	add ZL, global_temp
-	sbci ZH, 0
+	clr global_temp
+
+	add ZL, floor_called
+	adc ZH, global_temp
 
 	// Lê o dado armazenado na posição da fila e salva no respectivo registrador
-	ld floor_queue_position, Z
+	ld global_temp, Z
 
-	// Salva no valor lido a chamada atual (interna: 0b10 ou externa: 0b01)
-	// O operador "or" para armazenar as chamadas internas e externas
-	or floor_queue_position, external_or_internal_floor
+	// Salva no valor lido da chamada atual (interna: 0b10 ou externa: 0b01)
+	// O operador "or" é usado para mesclar e armazenar as chamadas internas e externas
+	or global_temp, external_or_internal_floor
 
 	// Salva o novo valor na posição da fila
-	st Z, floor_queue_position
+	st Z, global_temp
 
-	pop floor_queue_position
 	pop global_temp
 
 	ret
 
-.undef floor_queue_position
 .undef floor_called
 .undef external_or_internal_floor
 /* -------------------------------------------------------------------------- */
 
 /* -----------Clear Call: Limpa a chamada que foi executada da fila---------- */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (global_temp), r1                                */
+/* Registradores usados: r16 (global_temp)                                    */
 /* Definição da função: void Clear_call()                                     */
-.def floor_queue_position = r17
 Clear_call:
 	push global_temp
-
-	// Copia o valor do andar chamado para gerar a posição na fila
-	mov floor_queue_position, global_current_floor
-
-	// Aplica a função (3 - x) para converter o andar em uma posição da fila
-	ldi global_temp, 3
-	sub global_temp, floor_queue_position
 
 	// Inicialização do ponteiro Z
 	ldi ZL, low(queue)
 	ldi ZH, high(queue)
 
 	// Desloca o ponteiro para a posição do andar na fila
-	add ZL, global_temp
-	sbci ZH, 0
+	clr global_temp
 
-	// Realiza um clear na posição do andar na fila
-	clr floor_queue_position
+	add ZL, global_current_floor
+	adc ZH, global_temp
 
 	// Salva o novo valor na posição da fila (limpa a posição da fila)
-	st Z, floor_queue_position
+	clr global_temp
+	st Z, global_temp
 
 	pop global_temp
 
 	ret
-
-.undef floor_queue_position
 /* -------------------------------------------------------------------------- */
 
 /* Get high priority floor: Atribui ao registrador next_floor o novo destino  */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (global_temp), r17, r18, r19, r20                */
-/* Registradores usados: r22 (global_current_floor), r24 (global_direction)   */
+/* Registradores usados: r16 (global_temp), r17, r18, r19                     */
+/* Registradores usados: r21 (global_current_floor), r23 (global_direction)   */
 /* Definição da função: int Get_next_floor()                                  */
-/* Retorno: r20 (andar com maior prioridade)                                  */
-.def high_floor = r17
-.def floor_queue_position = r18
-.def call_in_floor = r19
-.def next_destiny = r20
+/* Retorno: r19 (andar com maior prioridade)                                  */
+.def floor_queue_position = r17
+.def call_in_floor = r18
+.def next_destiny = r19
 Get_high_priority_floor:
 	push global_temp
-	push high_floor
 	push floor_queue_position
 	push call_in_floor
-
-	// Copia o valor do andar atual para o registrador de andar com maior prioridade
-	mov high_floor, global_current_floor
-
-	// Aplica a função (3 - x) para converter o andar em uma posição da fila
-	ldi global_temp, 3
-	// Salva o andar no registrador temporário (convertido para a posição na fila)
-	sub global_temp, high_floor
-
-	// Salva o valor 3 para converter a posição de retorno em um andar
-	ldi high_floor, 3
 
 	// Inicialização do ponteiro Z
 	ldi ZL, low(queue)
@@ -243,51 +211,54 @@ Get_high_priority_floor:
 		breq case_direction_down
 
 	case_direction_stop:
-		// Inicializa o registrador da fila dos andares com zero (para realizar o loop de 0 a 3)
-		clr floor_queue_position
+		// Desloca o ponteiro para a terceira posição (andar padrão de maior prioridade)
+		adiw Z, 3
+
+		// Inicializa a posição da fila no andar de maior prioridade (3º andar) (loop de 3 a 0)
+		ldi floor_queue_position, 3
 		while_direction_stop:
-			// Verifica se já passou por todos os valores
-			cpi floor_queue_position, 4
-			brge end_while_direction_stop
+			// Verifica se já passou por todos os valores (andares)
+			cpi floor_queue_position, 0
+			brlt end_while_direction_stop
 
 			// Lê a posição atual da fila
-			ld call_in_floor, Z+ 
+			ld call_in_floor, Z
 
 			// Verifica se existe uma chamada
 			cpi call_in_floor, 0
 			// Caso não exista, ele pula o retorno e checa o próximo andar
 			breq skip_direction_stop
 
-			// Converte a posição encontrada em um andar (3 - posição)
-			sub high_floor, floor_queue_position
-
 			rjmp found_result
 
 			skip_direction_stop:
-				inc floor_queue_position
+				// Decrementa a posição
+				dec floor_queue_position
+
+				// Decrementa o ponteiro Z
+				subi ZL, 1
+				sbci ZH, 0
+
 				rjmp while_direction_stop
 		end_while_direction_stop:
 
 		rjmp end_switch_direction
 
 	case_direction_up:
-		// Desloca o ponteiro para a posição do andar na fila
-		add ZL, global_temp
-		sbci ZH, 0
+		clr global_temp
+		// Desloca o ponteiro para a posição do andar atual
+		add ZL, global_current_floor
+		adc ZH, global_temp
 
-		// Inicializa a posição da fila com o valor do registrador temporário (andar atual na fila)
-		mov floor_queue_position, global_temp
+		// Inicializa a posição da fila no andar atual
+		mov floor_queue_position, global_current_floor
 		while_direction_up_internal:
-			// Verifica se já passou por todos os valores
-			cpi floor_queue_position, 0
-			brlt end_while_direction_up_internal
+			// Verifica se já passou por todos os valores (andares)
+			cpi floor_queue_position, 4
+			brge end_while_direction_up_internal
 
 			// Lê a posição atual da fila
-			ld call_in_floor, Z
-
-			// Decrementa o ponteiro Z
-			subi ZL, 1
-			sbci ZH, 0
+			ld call_in_floor, Z+
 
 			// Faz uma máscara no bit referente à chamada interna
 			andi call_in_floor, 0b00000010
@@ -296,13 +267,10 @@ Get_high_priority_floor:
 			// Caso não exista, ele pula o retorno e checa o próximo andar
 			breq skip_direction_up_internal
 
-			// Converte a posição encontrada em um andar (3 - posição)
-			sub high_floor, floor_queue_position
-
 			rjmp found_result
 
 			skip_direction_up_internal:
-				dec floor_queue_position
+				inc floor_queue_position
 				rjmp while_direction_up_internal
 		end_while_direction_up_internal:
 
@@ -310,17 +278,18 @@ Get_high_priority_floor:
 		ldi ZL, low(queue)
 		ldi ZH, high(queue)
 
-		// Inicializa a posição da fila com o valor zero
-		clr floor_queue_position
-		// Incrementa o valor do registrador temporário em 1
-		inc global_temp
+		// Desloca o ponteiro para a terceira posição (andar padrão de maior prioridade)
+		adiw Z, 3
+
+		// Inicializa a posição da fila no andar de maior prioridade (3º andar) (loop de 3 a 0)
+		ldi floor_queue_position, 3
 		while_direction_up_external:
-			// Verifica se já passou por todos os valores
-			cp floor_queue_position, global_temp
-			brge end_while_direction_up_external
+			// Verifica se já passou por todos os valores (andares)
+			cp floor_queue_position, global_current_floor
+			brlt end_while_direction_up_external
 
 			// Lê a posição atual da fila
-			ld call_in_floor, Z+
+			ld call_in_floor, Z
 
 			// Faz uma máscara no bit referente à chamada externa
 			andi call_in_floor, 0b00000001
@@ -329,45 +298,52 @@ Get_high_priority_floor:
 			// Caso não exista, ele pula o retorno e checa o próximo andar
 			breq skip_direction_up_external
 
-			// Converte a posição encontrada em um andar (3 - posição)
-			sub high_floor, floor_queue_position
-
 			rjmp found_result
 
 			skip_direction_up_external:
-				inc floor_queue_position
+				// Decrementa a posição
+				dec floor_queue_position
+
+				// Decrementa o ponteiro Z
+				subi ZL, 1
+				sbci ZH, 0
+
 				rjmp while_direction_up_external
 		end_while_direction_up_external:
 
 		rjmp end_switch_direction
 
 	case_direction_down:
-		// Desloca o ponteiro para a posição do andar na fila
-		add ZL, global_temp
-		sbci ZH, 0
+		clr global_temp
+		// Desloca o ponteiro para a posição do andar atual
+		add ZL, global_current_floor
+		adc ZH, global_temp
 
-		// Inicializa a posição da fila com o andar atual na fila
-		mov floor_queue_position, global_temp
+		// Inicializa a posição da fila no andar atual
+		mov floor_queue_position, global_current_floor
 		while_direction_down:
-			// Verificar se já passou por todos os valores
-			cpi floor_queue_position, 4
-			brge end_while_direction_down
+			// Verifica se já passou por todos os valores (andares)
+			cpi floor_queue_position, 0
+			brlt end_while_direction_down
 
 			// Lê a posição atual da fila
-			ld call_in_floor, Z+
+			ld call_in_floor, Z
 
 			// Verifica se existe uma chamada
 			cpi call_in_floor, 0
 			// Caso não exista, ele pula o retorno e checa o próximo andar
 			breq skip_direction_down
 
-			// Converte a posição encontrada para um andar (3 - posição)
-			sub high_floor, floor_queue_position
-
 			rjmp found_result
 
 			skip_direction_down:
-				inc floor_queue_position
+				// Decrementa a posição
+				dec floor_queue_position
+
+				// Decrementa o ponteiro Z
+				subi ZL, 1
+				sbci ZH, 0
+
 				rjmp while_direction_down
 		end_while_direction_down:
 
@@ -380,19 +356,16 @@ Get_high_priority_floor:
 
 	found_result:
 		// Atribui o andar encontrado ao destino
-		mov next_destiny, high_floor
+		mov next_destiny, floor_queue_position
 
 	not_found_result:
 		
-
 	pop call_in_floor
 	pop floor_queue_position
-	pop high_floor
 	pop global_temp
 
 	ret
 
-.undef high_floor
 .undef floor_queue_position
 .undef call_in_floor
 .undef next_destiny
@@ -400,7 +373,7 @@ Get_high_priority_floor:
 
 /* -------Update display: Uma subrotina que atualiza o andar no display------ */
 /* -------------------------------------------------------------------------- */
-/* Registradores usados: r16 (global_temp), r22 (global_current_floor)        */
+/* Registradores usados: r16 (global_temp), r21 (global_current_floor)        */
 Update_display:
 	push global_temp
 
@@ -536,7 +509,7 @@ SETUP:
 	/* ---------------------------------------------------------------------- */
 
 	/* -------------------------Inicialização da fila------------------------ */
-	ldi global_temp, 0
+	clr global_temp
 
 	sts queue, global_temp
 	sts queue + 1, global_temp
@@ -582,11 +555,10 @@ SETUP:
 /* -------------------------------------------------------------------------- */
 
 /* ---------------------------FUNCIONAMENTO PRINCIPAL------------------------ */
+.def floor_called = r17
+.def external_or_internal_floor = r18
+.def next_destiny = r19
 MAIN:
-	.def floor_called = r18
-	.def external_or_internal_floor = r19
-	.def next_destiny = r20
-
 	/* ----------------Leitura dos botões (internos e externos)-------------- */
 	sbic PINB, pin_button_external_floor_0
 	rjmp button_external_floor_0_pressed
@@ -874,12 +846,14 @@ MAIN:
 		case_holding_door_longjump:
 			// Verifica se o botão de abrir a porta está sendo pressionado
 			sbis PIND, pin_button_open_door
+			// Caso o botão esteja sendo pressionado essa instrução é pulada
 			rjmp close_door
 		
-			// Aplica um delay para evitar o bounce
-			call Delay_20ms
+			hold_door:
+				// Aplica um delay para evitar o bounce
+				call Delay_20ms
 
-			rjmp end_switch_state
+				rjmp end_switch_state
 
 			close_door:
 				// Muda o estado para "case_next_destiny"
@@ -902,8 +876,8 @@ MAIN:
 		end_switch_state:
 		/* -------------------------------CASOS----------------------------- */
 
-		.undef floor_called
-		.undef external_or_internal_floor
-		.undef next_destiny
-
 	rjmp MAIN
+
+.undef floor_called
+.undef external_or_internal_floor
+.undef next_destiny
